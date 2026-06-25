@@ -189,7 +189,7 @@ but this also requires administrative overhead.
 <a name="canonicalization"></a>
 <h2>Canonicalization</h2>
 <p>
-A consistent representation of resources in their wire formats (JSON and XML) is required to 
+A consistent representation of resources in their wire formats (JSON, XML, and RDF) is required to
 make signatures interoperable; this is called 'Canonicalizing' resources. Because of the complexities around the interplay between 
 data exchange and human-level signatures, FHIR defines a number of ways of canonicalizing resources
 that are suitable for different purposes. 
@@ -233,6 +233,7 @@ are part of the XML DOM, and whitespace and namespaces may be reorganised withou
 </p>
 <p>
 However most implementers never use the XML format, and the JSON Canonicalization is sufficient when it is not.
+(The same consideration applies to the RDF Canonicalization; see RDF-XML below.)
 If XML is in scope (and implementers should note that this is a requirement that might arise retrospectively), 
 then this alternative canonicalization <code>JSON-XML</code> method should be used. The rules for 
 this canonicalization are the same as for the JSON canonicalization, except that:
@@ -271,10 +272,42 @@ in which the targets are defined.
 </p>
 
 
+<a name="rdf"></a>
+<h3>RDF</h3>
+<p>
+When RDF resources are canonicalized, the RDF dataset SHALL be canonicalized in accordance with
+<a href="https://www.w3.org/TR/rdf-canon/">RDF Dataset Canonicalization (RDFC-1.0)</a>, and the canonical
+form is the resulting canonical N-Quads serialization, encoded as UTF-8.
+In addition, the following rules apply:
+</p>
+<ul>
+  <li>The hash function used internally by RDFC-1.0 for the canonical labelling of blank nodes SHALL be
+    SHA-256 (the default defined by RDFC-1.0). RDFC-1.0 permits implementations to be parameterized
+    with other hash functions, but these produce different canonical blank node identifiers and SHALL
+    not be used with this canonicalization. Note that this rule constrains only the canonicalization
+    algorithm; the digest and signature algorithms of the digital signature itself are chosen as
+    described under <a href="#methods">Digital Signature Methods</a></li>
+  <li>The lexical form of literals SHALL not be altered (including whitespace in the XHTML literal
+    carrying the <a href="narrative.html">Narrative</a>, and multiple spaces in markdown)</li>
+  <li>Datatype IRIs and language tags SHALL be retained as found in the dataset</li>
+</ul>
+<p>
+This canonicalization method is identified by the URI <code>http://hl7.org/fhir/canonicalization/rdf</code>.
+</p>
+<p>
+The RDF Canonicalization has the same limitation as the JSON Canonicalization: it does
+not allow for the reconstruction of a standard payload for signature verification if (and only if)
+the resource is represented as XML at some point in the life cycle between signing and verification,
+because the Narrative is carried in RDF as a single XHTML literal whose whitespace and namespaces
+may be reorganised when the resource passes through the XML format.
+</p>
+
 <a name="variants"></a>
 <h3>Canonicalization Variants</h3>
 <p>
-The following additional canonicalization URIs are also defined for all three forms defined above:
+The following additional canonicalization URIs are also defined for all of the forms defined above. For
+the RDF canonicalizations, the named elements (Narrative, <code>Resource.meta</code>, etc.) are omitted
+from the resource prior to conversion to the RDF dataset.
 </p>
 <table class="grid">
  <tr>
@@ -352,10 +385,14 @@ internationally adopted for secure, granular verification of health information 
 </p>
 
 <p>
-Implementers should note that the choice of JSON vs XML digital signature is partially independent of 
-the format of the resource that contains the signature, and also independent of the 
-<code>Signature.targetFormat</code>. However mixing formats creates challenges, and implementers SHOULD 
+Implementers should note that the choice of JSON vs XML digital signature is partially independent of
+the format of the resource that contains the signature, and also independent of the
+<code>Signature.targetFormat</code>. However mixing formats creates challenges, and implementers SHOULD
 generally use JSON signatures with the JSON canonicalization in JSON resources, and XML signatures with the XML canonicalization in XML resources.
+For resources signed using the RDF canonicalization, implementers SHOULD generally use the
+<a href="#rdf-signatures">RDF Signature</a> form described below, which is native to RDF; a JWS signature
+MAY be used instead, e.g. when consistency with other JSON-based signatures in the same workflow is more
+important than using an RDF-native proof.
 </p>
 
 <a name="JWS"></a>
@@ -370,7 +407,7 @@ When the signature is a JWS Digital Signature, the following rules apply:
  <li>The <code>Signature.targetFormat</code> SHOULD be populated, and the value SHOULD contain a canonicalization URL from those defined above. The custom protected header property <code>canon</code> MAY be also be used to identify the canonicalization method</li>
  <li>The signature is a <a href="https://tools.ietf.org/html/rfc7515#appendix-F">Detached</a> Signature
     (where the content that is signed is separate from the signature itself), and the payload SHALL be omitted</li>
- <li>When FHIR Resources are signed, the signature is across either the <a href="xml.html#canonical">Canonical XML form</a> or <a href="json.html#canonical">Canonical JSON form</a> 
+ <li>When FHIR Resources are signed, the signature is across the <a href="xml.html#canonical">Canonical XML form</a>, <a href="json.html#canonical">Canonical JSON form</a>, or <a href="rdf.html#canonical">Canonical RDF form</a>
     of the resource(s) as indicated in the <code>targetFormat</code> element as described above.</li>
 
  <li>The <code>Signature.who</code> SHOULD be populated, and if it is, it SHALL contain a value in either <code>Reference.reference</code> 
@@ -396,7 +433,7 @@ When the signature is an XML Digital Signature, the following rules apply:
   <li>The value of Signature.sigFormat is <code>application/pkcs7-signature</code> and this SHOULD be populated</li>
   <li>The <code>Signature.targetFormat</code> SHOULD be populated, and the value SHOULD contain a canonicalization URL from those defined above</li>
   <li>The signature is a <a href="https://tools.ietf.org/html/rfc7515#appendix-F">Detached</a> Signature (where the content that is signed is separate from the signature itself)</li>
-  <li>When FHIR Resources are signed, the signature is across either the <a href="xml.html#canonical">Canonical XML form</a> or <a href="json.html#canonical">Canonical JSON form</a> 
+  <li>When FHIR Resources are signed, the signature is across the <a href="xml.html#canonical">Canonical XML form</a>, <a href="json.html#canonical">Canonical JSON form</a>, or <a href="rdf.html#canonical">Canonical RDF form</a>
     of the resource(s) as indicated in the <code>targetFormat</code> element.</li>
   <li>The Signature SHOULD include a "xades CommitmentTypeId" element for the Purpose(s) of Signature. 
     The Purpose can be the action being attested to, or the role associated with the signature. The value shall come from ASTM E1762-95(2013). 
@@ -411,6 +448,54 @@ When the signature is an XML Digital Signature, the following rules apply:
   <li>The Signature MAY conform to <a href="https://www.w3.org/TR/XAdES/#XML_Advanced_Electronic_Signature_Data_Structures_Contents_of_XAdES_T">XAdES-T</a> or any other profiling of XML-Signature. If more than integrity is required, the XAdES specification provides a set of profiles, and implementers should consider the rules found in those profiles carefully.</li>
 </ul>
 
+<a name="rdf-signatures"></a>
+<h3>RDF Signatures</h3>
+
+<p>
+When the signature is a <a href="https://www.w3.org/TR/vc-data-integrity/">W3C Verifiable Credential Data Integrity</a> proof, the following rules apply:
+</p>
+<ul>
+ <li>The Signature.data is the base64 encoded JSON serialization of the Data Integrity <code>proof</code> object
+   (the properties <code>type</code>, <code>cryptosuite</code>, <code>created</code>, <code>verificationMethod</code>,
+   <code>proofPurpose</code>, and <code>proofValue</code>), and not the resource(s) it signs</li>
+ <li>The value of Signature.sigFormat is <code>application/ld+json</code> and this SHOULD be populated</li>
+ <li>The <code>Signature.targetFormat</code> SHOULD be populated, and the value SHALL contain a canonicalization
+   URL from those defined above for RDF (<code>rdf</code> or <code>rdf-xml</code>), together with the cryptosuite
+   used to produce the proof, e.g.
+   <code>text/turtle;canonicalization=http://hl7.org/fhir/canonicalization/rdf;cryptosuite=eddsa-rdfc-2022</code>.
+   The same cryptosuite SHALL also be present as <code>proof.cryptosuite</code>, and if both are populated, their
+   values SHALL agree</li>
+ <li>The proof is a Detached proof, in the same sense as the JWS and XML Digital Signature forms above: the
+   canonical RDF form of the resource(s) being signed is reconstructed by the verifier rather than carried
+   inside Signature.data, and the <code>proof</code> object itself (other than its <code>proofValue</code>) is
+   included in, but the <code>proofValue</code> is excluded from, the data that is canonicalized and signed,
+   per the Data Integrity specification</li>
+ <li>When FHIR Resources are signed, the signature is across the <a href="rdf.html#canonical">Canonical RDF form</a>
+   of the resource(s) as indicated in the <code>targetFormat</code> element, combined with the proof options as
+   required by the cryptosuite</li>
+ <li>The <code>Signature.who</code> SHOULD be populated, and if it is, it SHALL contain a value in either
+   <code>Reference.reference</code> or <code>Reference.identifier</code> that matches the controller of
+   <code>proof.verificationMethod</code></li>
+ <li>The <code>proof.verificationMethod</code> SHALL be populated with a dereferenceable URL (commonly a
+   <code>did:key</code> or other DID method URL, or an <code>https</code> URL) identifying the public key used
+   to verify the proof, playing the same role as <code>kid</code>/<code>x5c</code> in JWS and
+   <code>X509Certificate</code> in XML Digital Signatures</li>
+ <li>The <code>proof.proofPurpose</code> SHALL be populated for the Purpose(s) of Signature, playing the same
+   role as the "srCms signer commitments" property in JWS and the "xades CommitmentTypeId" element in XML
+   Digital Signatures. The Purpose can be the action being attested to, or the role associated with the
+   signature, and the <code>Signature.type</code> SHALL contain the same values where both are present</li>
+ <li>The <code>proof.created</code> SHOULD be populated and the <code>Signature.when</code> SHOULD be populated,
+   and if they are both populated, their values SHALL agree</li>
+ <li>The <code>proof.cryptosuite</code> SHALL be one of the cryptosuites defined by the Data Integrity
+   specifications that are built on RDFC-1.0 canonicalization, such as
+   <a href="https://www.w3.org/TR/vc-di-eddsa/#eddsa-rdfc-2022"><code>eddsa-rdfc-2022</code></a> or
+   <a href="https://www.w3.org/TR/vc-di-ecdsa/#ecdsa-rdfc-2019"><code>ecdsa-rdfc-2019</code></a>. The
+   <code>*-jcs-*</code> family of cryptosuites canonicalizes via JCS rather than RDFC-1.0 and SHALL not be used
+   with the <code>rdf</code> or <code>rdf-xml</code> canonicalization methods defined above</li>
+ <li>There is currently no Data Integrity profile equivalent to JAdES-B-LTA or XAdES-X-L for long term
+   signatures; implementers with that requirement should consider an additional, separately timestamped
+   signature using one of the other forms above</li>
+</ul>
 
 <a name="Provenance"></a>
 <h3>Digital Signatures in Provenance Resources</h3>
